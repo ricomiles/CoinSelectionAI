@@ -1,6 +1,4 @@
 using CardanoCoinSelection.Models.API;
-using CardanoCoinSelection.Models.ML;
-using CardanoCoinSelection.Services;
 using Chrysalis.Cbor.Extensions.Cardano.Core.Common;
 using Chrysalis.Cbor.Extensions.Cardano.Core.Transaction;
 using Chrysalis.Cbor.Types.Cardano.Core.Common;
@@ -30,46 +28,37 @@ public class CoinSelectionModelController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("Received prediction request with {UtxoCount} UTXOs",
-                request.AvailableUtxos.Count);
+            // Convert request to domain types
+            var availableUtxos = ConvertToResolvedInputs(request.AvailableUtxos);
+            var requestedAmount = ConvertToValues(request.RequestedAmounts);
+            var maxInputs = request.MaxInputs ?? int.MaxValue;
 
-            // Convert request to model input
-            var input = new CoinSelectionInput
-            {
-                AvailableUtxos = ConvertToResolvedInputs(request.AvailableUtxos),
-                RequestedAmount = ConvertToValues(request.RequestedAmounts),
-                MaxInputs = request.MaxInputs ?? int.MaxValue
-            };
-
-            // Get prediction from the model
+            // Call AI service directly
             var startTime = DateTime.UtcNow;
-            var output = _model.Predict(input);
+            var result = _model.Predict(availableUtxos, requestedAmount, maxInputs);
             var executionTime = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
             // Create response with AI-like metadata
             var response = new PredictionResponse
             {
-                SelectedUtxos = ConvertFromResolvedInputs(output.SelectedUtxos),
-                LovelaceChange = output.LovelaceChange,
-                AssetsChange = output.AssetsChange,
+                SelectedUtxos = ConvertFromResolvedInputs(result.Inputs),
+                LovelaceChange = result.LovelaceChange,
+                AssetsChange = [],
                 Metadata = new PredictionMetadata
                 {
                     ModelVersion = "cardano-selection-v1.2",
-                    ConfidenceScore = output.ConfidenceScore,
-                    OptimalityScore = output.OptimalityScore,
+                    ConfidenceScore = 0,
+                    OptimalityScore = 0,
                     ExecutionTimeMs = executionTime,
-                    FeatureImportances = output.FeatureImportances,
+                    FeatureImportances = [],
                     PredictionId = Guid.NewGuid().ToString()
                 }
             };
-
-            _logger.LogInformation("Prediction completed in {ExecutionTime}ms", executionTime);
 
             return Ok(response);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing prediction request");
             return BadRequest(new { error = ex.Message });
         }
     }
