@@ -1,0 +1,6 @@
+@CardanoCoinSelection_HostAddress = http://localhost:5130
+
+GET {{CardanoCoinSelection_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
